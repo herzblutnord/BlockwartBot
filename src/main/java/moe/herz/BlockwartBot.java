@@ -2,23 +2,30 @@ package moe.herz;
 
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
-import okhttp3.*;
-
 import org.pircbotx.hooks.ListenerAdapter;
 import org.pircbotx.hooks.types.GenericMessageEvent;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.MessageEvent;
 import org.pircbotx.User;
 
+import java.util.regex.Pattern;
+import java.util.Random;
 import java.util.*;
 import java.io.IOException;
 import javax.net.ssl.SSLSocketFactory;
+import java.util.regex.Matcher;
+import java.net.URISyntaxException;
+import java.net.URI;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-
+import okhttp3.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 
 public class BlockwartBot extends ListenerAdapter {
 
+    private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\"};
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
 
@@ -47,26 +54,64 @@ public class BlockwartBot extends ListenerAdapter {
 
     }
 
+    public String fetchWebsiteMetadata(String url) {
+        try {
+            new URI(url);
+            Document doc = Jsoup.connect(url).get();
+            return doc.title();
+        } catch (URISyntaxException exception) {
+            return "Invalid URL: " + url;
+        } catch (IOException e) {
+            return "Error connecting to URL: " + url;
+        }
+    }
+
+
     @Override
     public void onGenericMessage(GenericMessageEvent event) {
+
+        // Regular expression pattern to identify URLs in the message
+        Pattern urlPattern = Pattern.compile("(https?://)?([\\da-z.-]+)\\.([a-z.]{2,6})([/\\w .-]*)*/?", Pattern.CASE_INSENSITIVE);
+
+        Matcher matcher = urlPattern.matcher(event.getMessage());
+
+        while (matcher.find()) {
+            String url = matcher.group();
+            if (!url.startsWith("http")) {
+                url = "http://" + url; // Add http protocol if not present
+            }
+            String metadata = fetchWebsiteMetadata(url);
+            if (event instanceof MessageEvent messageEvent) {
+                messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), metadata);
+            }
+            // Send message directly without username
+        }
 
         if (event.getMessage().startsWith(".ud")) {
             String[] parts = event.getMessage().split(" ", 2);
             if (parts.length == 2) {
                 String term = parts[1];
-                String definition = "";
-                try {
-                    definition = searchUrbanDictionary(term);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                String definition = searchUrbanDictionary(term);
                 event.respond(definition);
             }
+        }
+
+        Pattern p = Pattern.compile("nya*|meow");
+        Matcher m = p.matcher(event.getMessage());
+        if (m.find()) {
+            Random rand = new Random();
+            int index = rand.nextInt(catKaomojis.length);
+            if (event instanceof MessageEvent messageEvent) {
+                messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), catKaomojis[index]);
+            }
+            // Send message directly without username
         }
     }
 
 
-    private String searchUrbanDictionary(String term) throws IOException {
+
+
+    private String searchUrbanDictionary(String term) {
         String apiKey = "***REMOVED***";
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
@@ -88,18 +133,21 @@ public class BlockwartBot extends ListenerAdapter {
             } else {
                 return "Error: Response body is null";
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "Error connecting to Urban Dictionary API.";
         }
     }
+
 
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot!");
-        } else {
-            event.getChannel().send().message("Welcome to herz.moe, have fun, be comfy and don't be a baka >.<");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.2)");
         }
     }
+
 
     @Override
     public void onMessage(MessageEvent event) {
@@ -125,9 +173,11 @@ public class BlockwartBot extends ListenerAdapter {
                     event.respond("This user has too many messages to receive.");
                     return;
                 }
-                // Check if sender has too many pending messages
-                if (unsentMessages.containsKey(sender) && unsentMessages.get(sender).size() >= MAX_UNSENT_MESSAGES) {
-                    event.respond("You have too many pending messages.");
+
+                // Check if sender has too many pending messages for the recipient
+                LinkedList<String> recipientMessages = unsentMessages.getOrDefault(recipient, new LinkedList<>());
+                if (recipientMessages.stream().filter(m -> m.startsWith(sender + ":")).count() >= MAX_UNSENT_MESSAGES) {
+                    event.respond("You have too many pending messages for this user.");
                     return;
                 }
 
@@ -136,7 +186,7 @@ public class BlockwartBot extends ListenerAdapter {
                 messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
 
                 // Add confirmation message
-                event.getChannel().send().message("Your message will be delivered the next time " + recipient + " is online!");
+                event.getChannel().send().message("Your message will be delivered the next time " + recipient + " is here!");
             }
         }
         // If it's a regular message, check if there are any postponed messages for the user

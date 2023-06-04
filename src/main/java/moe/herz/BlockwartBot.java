@@ -80,19 +80,42 @@ public class BlockwartBot extends ListenerAdapter {
             if (!url.startsWith("http")) {
                 url = "http://" + url; // Add http protocol if not present
             }
-            String metadata = fetchWebsiteMetadata(url);
-            if (event instanceof MessageEvent messageEvent) {
-                messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), metadata);
+
+            // Skip non-HTML files
+            String[] skippedExtensions = {".jpg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
+            boolean skip = false;
+            for (String extension : skippedExtensions) {
+                if (url.toLowerCase().endsWith(extension)) {
+                    skip = true;
+                    break;
+                }
             }
-            // Send message directly without username
+
+            if (!skip) {
+                String metadata = fetchWebsiteMetadata(url);
+                if (event instanceof MessageEvent messageEvent) {
+                    messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), metadata);
+                }
+            }
         }
 
         if (event.getMessage().startsWith(".ud")) {
             String[] parts = event.getMessage().split(" ", 2);
             if (parts.length == 2) {
                 String term = parts[1];
-                String definition = searchUrbanDictionary(term);
-                event.respond(definition);
+                List<String> definitions = searchUrbanDictionary(term);
+                int count = 0;
+                for (String definition : definitions) {
+                    if (count < 4) {
+                        event.respond(definition);
+                    } else {
+                        break;
+                    }
+                    count++;
+                }
+                if (definitions.size() > 4) {
+                    event.respond("... [message truncated due to length]");
+                }
             }
         }
 
@@ -111,7 +134,7 @@ public class BlockwartBot extends ListenerAdapter {
 
 
 
-    private String searchUrbanDictionary(String term) {
+    private List<String> searchUrbanDictionary(String term) {
         String apiKey = "***REMOVED***";
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
@@ -126,25 +149,31 @@ public class BlockwartBot extends ListenerAdapter {
                 String jsonData = response.body().string();
                 JsonElement jsonElement = JsonParser.parseString(jsonData);
                 if (jsonElement.getAsJsonObject().get("list").getAsJsonArray().size() > 0) {
-                    return jsonElement.getAsJsonObject().get("list").getAsJsonArray().get(0).getAsJsonObject().get("definition").getAsString();
+                    String definition = jsonElement.getAsJsonObject().get("list").getAsJsonArray().get(0).getAsJsonObject().get("definition").getAsString();
+
+                    List<String> definitionParts = new ArrayList<>();
+                    String[] parts = definition.split("\\r?\\n");
+                    Collections.addAll(definitionParts, parts);
+                    return definitionParts;
                 } else {
-                    return "No definition found for " + term;
+                    return Collections.singletonList("No definition found for " + term);
                 }
             } else {
-                return "Error: Response body is null";
+                return Collections.singletonList("Error: Response body is null");
             }
         } catch (IOException e) {
             e.printStackTrace();
-            return "Error connecting to Urban Dictionary API.";
+            return Collections.singletonList("Error connecting to Urban Dictionary API.");
         }
     }
+
 
 
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.2)");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.3)");
         }
     }
 

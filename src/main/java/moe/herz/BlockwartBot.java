@@ -25,7 +25,7 @@ import org.jsoup.nodes.Document;
 
 public class BlockwartBot extends ListenerAdapter {
 
-    private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\"};
+    private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~"};
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
 
@@ -82,7 +82,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
 
             // Skip non-HTML files
-            String[] skippedExtensions = {".jpg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
+            String[] skippedExtensions = {".jpg",".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
             boolean skip = false;
             for (String extension : skippedExtensions) {
                 if (url.toLowerCase().endsWith(extension)) {
@@ -119,7 +119,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
 
-        Pattern p = Pattern.compile("nya*|meow");
+        Pattern p = Pattern.compile("(?i)^nya.*|meow");
         Matcher m = p.matcher(event.getMessage());
         if (m.find()) {
             Random rand = new Random();

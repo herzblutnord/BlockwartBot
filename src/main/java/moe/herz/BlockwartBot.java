@@ -29,7 +29,7 @@ import org.jsoup.nodes.Document;
 
 public class BlockwartBot extends ListenerAdapter {
 
-    private Properties properties; // Move properties declaration here
+    private Properties properties;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~"};
     private static final int MAX_UNSENT_MESSAGES = 5;
@@ -38,6 +38,7 @@ public class BlockwartBot extends ListenerAdapter {
     private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
     private final Map<String, Integer> messagesToReceive = new HashMap<>();
 
+    //read the API key from the config.properties file
     public BlockwartBot() {
         try (FileInputStream in = new FileInputStream("./config.properties")) {
             properties = new Properties();
@@ -69,7 +70,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
 
     }
-
+    //fetches website data via jsoup
     public String fetchWebsiteMetadata(String url) {
         try {
             new URI(url);
@@ -82,6 +83,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
+    //onGenericMessage events
     @Override
     public void onGenericMessage(GenericMessageEvent event) {
 
@@ -114,6 +116,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
 
+        //urban dictionary command recognition
         if (event.getMessage().startsWith(".ud")) {
             String[] parts = event.getMessage().split(" ", 2);
             if (parts.length == 2) {
@@ -134,6 +137,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
 
+        //nya-meow react
         Pattern p = Pattern.compile("(?i)^nya.*|meow");
         Matcher m = p.matcher(event.getMessage());
         if (m.find()) {
@@ -145,7 +149,7 @@ public class BlockwartBot extends ListenerAdapter {
             // Send message directly without username
         }
     }
-
+    //urban dictionary api
     private List<String> searchUrbanDictionary(String term) {
         String apiKey = properties.getProperty("api.key");
         OkHttpClient client = new OkHttpClient();
@@ -179,6 +183,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
+    //on join message by the bot
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
@@ -187,6 +192,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
+    //onMessage events
     @Override
     public void onMessage(MessageEvent event) {
         User user = event.getUser();

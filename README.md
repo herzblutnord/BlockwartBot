@@ -17,8 +17,8 @@ __Usage__
 - Add a config.properties file with the appropriate API keys for urban dictionary functionality
 
 __Commands__
-.ud <term>: The bot will respond with the definition of the term from Urban Dictionary.
-.tell <nick> <message>: The bot will store your message and deliver it to the specified user when they are active.
+- .ud <term>: The bot will respond with the definition of the term from Urban Dictionary.
+- .tell <nick> <message>: The bot will store your message and deliver it to the specified user when they are active.
   
 __Dependencies__
 - [PircBotX](https://github.com/pircbotx/pircbotx): PircBotX is a multi-threaded, lightweight, feature packed IRC bot library.
@@ -28,5 +28,5 @@ __Dependencies__
   
 
 __Author__
-  
-moe.herz
+
+[herz.moe](https://herz.moe)

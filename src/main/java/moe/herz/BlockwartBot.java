@@ -10,12 +10,16 @@ import org.pircbotx.User;
 
 import java.util.regex.Pattern;
 import java.util.Random;
+import java.util.Properties;
+import java.io.FileInputStream;
 import java.util.*;
 import java.io.IOException;
 import javax.net.ssl.SSLSocketFactory;
 import java.util.regex.Matcher;
 import java.net.URISyntaxException;
 import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -25,12 +29,24 @@ import org.jsoup.nodes.Document;
 
 public class BlockwartBot extends ListenerAdapter {
 
+    private Properties properties; // Move properties declaration here
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~"};
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
 
     private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
     private final Map<String, Integer> messagesToReceive = new HashMap<>();
+
+    public BlockwartBot() {
+        try (FileInputStream in = new FileInputStream("./config.properties")) {
+            properties = new Properties();
+            properties.load(in);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);  // Exit if the properties file cannot be loaded
+        }
+    }
 
     public static void main(String[] args) {
 
@@ -65,7 +81,6 @@ public class BlockwartBot extends ListenerAdapter {
             return "Error connecting to URL: " + url;
         }
     }
-
 
     @Override
     public void onGenericMessage(GenericMessageEvent event) {
@@ -131,11 +146,8 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
-
-
-
     private List<String> searchUrbanDictionary(String term) {
-        String apiKey = "***REMOVED***";
+        String apiKey = properties.getProperty("api.key");
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
                 .url("https://mashape-community-urban-dictionary.p.rapidapi.com/define?term=" + term)
@@ -167,8 +179,6 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
-
-
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
@@ -176,7 +186,6 @@ public class BlockwartBot extends ListenerAdapter {
             event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.3)");
         }
     }
-
 
     @Override
     public void onMessage(MessageEvent event) {
@@ -196,6 +205,7 @@ public class BlockwartBot extends ListenerAdapter {
             } else {
                 String recipient = parts[1];
                 String message = parts[2];
+                String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
 
                 // Check if recipient has too many messages to receive
                 if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {
@@ -211,7 +221,7 @@ public class BlockwartBot extends ListenerAdapter {
                 }
 
                 // Add the message to the recipient's queue of unsent messages
-                unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + ": " + message);
+                unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + " (" + timestamp + "): " + message);
                 messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
 
                 // Add confirmation message

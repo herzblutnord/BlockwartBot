@@ -14,7 +14,7 @@ __Features__
 - Auto-join IRC Channels: Auto-joins the IRC channel #herz on server herz.moe.
 
 __Usage__
-- Add a config.properties file with the appropriate API keys for urban dictionary functionality
+- Add a config.properties file with with "api.key=your rapidapi urbandicitionary api key here".
 
 __Commands__
 - .ud <term>: The bot will respond with the definition of the term from Urban Dictionary.

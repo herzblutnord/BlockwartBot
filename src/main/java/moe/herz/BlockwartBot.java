@@ -22,7 +22,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import okhttp3.*;
@@ -31,18 +30,22 @@ import org.jsoup.nodes.Document;
 
 public class BlockwartBot extends ListenerAdapter {
 
-    private Properties properties;
+    // Defined constants
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
             .withZone(ZoneId.of("Europe/Berlin"));
-
-    private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~"};
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
+    private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)",
+            "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~", "/ᐠ - ˕ -マ Ⳋ", "ฅ^•ﻌ•^ฅ", "ᓚᘏᗢ", "≽ܫ≼"};
 
+    //Properties object to hold configuration properties
+    private Properties properties;
+
+    // Hashmaps to manage messages
     private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
     private final Map<String, Integer> messagesToReceive = new HashMap<>();
 
-    //read the API key from the config.properties file
+    // Constructor to initialize properties
     public BlockwartBot() {
         try (FileInputStream in = new FileInputStream("./config.properties")) {
             properties = new Properties();
@@ -67,7 +70,7 @@ public class BlockwartBot extends ListenerAdapter {
                 .setSocketFactory(SSLSocketFactory.getDefault()) // Enable SSL
                 .buildConfiguration();
 
-        // Connect and start the bot
+        // Start the bot
         try (PircBotX bot = new PircBotX(configuration)) {
             bot.startBot();
         } catch (Exception e) {
@@ -75,7 +78,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
 
     }
-    //fetches website data via jsoup
+    // Method to fetch website metadata
     public String fetchWebsiteMetadata(String url) {
         try {
             new URI(url);
@@ -88,7 +91,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
-    //onGenericMessage events
+    // Method to handle general message events
     @Override
     public void onGenericMessage(GenericMessageEvent event) {
 
@@ -107,7 +110,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
 
             // Skip non-HTML files
-            String[] skippedExtensions = {".jpg",".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
+            String[] skippedExtensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
             boolean skip = false;
             for (String extension : skippedExtensions) {
                 if (url.toLowerCase().endsWith(extension)) {
@@ -124,7 +127,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
 
-        //urban dictionary command recognition
+        // Method to search Urban Dictionary for a term
         if (event.getMessage().startsWith(".ud")) {
             String[] parts = event.getMessage().split(" ", 2);
             if (parts.length == 2) {
@@ -191,7 +194,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
-    //on join message by the bot
+    // Greeting on bot joining
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
@@ -200,7 +203,7 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
-    //onMessage events
+    // Method to handle message events
     @Override
     public void onMessage(MessageEvent event) {
         User user = event.getUser();
@@ -220,6 +223,15 @@ public class BlockwartBot extends ListenerAdapter {
                 String recipient = parts[1];
                 String message = parts[2];
                 String timestamp = ZonedDateTime.now().format(TIME_FORMATTER);
+
+                // Check if the recipient is the sender themselves or the bot
+                if (recipient.equalsIgnoreCase(sender)) {
+                    event.respond("Aww, talking to yourself? How pityful...");
+                    return;
+                } else if (recipient.equalsIgnoreCase(event.getBot().getNick())) {
+                    event.respond("I am right here, baka!");
+                    return;
+                }
 
                 // Check if recipient has too many messages to receive
                 if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {

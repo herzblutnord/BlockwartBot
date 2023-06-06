@@ -199,7 +199,7 @@ public class BlockwartBot extends ListenerAdapter {
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5)");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5.1)");
         }
     }
 

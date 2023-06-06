@@ -58,7 +58,7 @@ public class BlockwartBot extends ListenerAdapter {
 
     public static void main(String[] args) {
 
-        String botName = "LoreleyWIP";
+        String botName = "Loreley";
 
         // Configure the bot
         Configuration configuration = new Configuration.Builder()
@@ -199,7 +199,7 @@ public class BlockwartBot extends ListenerAdapter {
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.4)");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5)");
         }
     }
 

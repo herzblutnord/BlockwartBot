@@ -18,8 +18,10 @@ import javax.net.ssl.SSLSocketFactory;
 import java.util.regex.Matcher;
 import java.net.URISyntaxException;
 import java.net.URI;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -30,7 +32,9 @@ import org.jsoup.nodes.Document;
 public class BlockwartBot extends ListenerAdapter {
 
     private Properties properties;
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
+            .withZone(ZoneId.of("Europe/Berlin"));
+
     private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)", "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~"};
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
@@ -51,13 +55,14 @@ public class BlockwartBot extends ListenerAdapter {
 
     public static void main(String[] args) {
 
-        String botName = "Loreley";
+        String botName = "LoreleyWIP";
 
         // Configure the bot
         Configuration configuration = new Configuration.Builder()
                 .setName(botName)
-                .addServer("herz.moe", 6667)
+                .addServer("herz.moe", 6697)
                 .addAutoJoinChannel("#herz")
+                .addAutoJoinChannel("#deutsch")
                 .addListener(new BlockwartBot())
                 .setSocketFactory(SSLSocketFactory.getDefault()) // Enable SSL
                 .buildConfiguration();
@@ -77,9 +82,9 @@ public class BlockwartBot extends ListenerAdapter {
             Document doc = Jsoup.connect(url).get();
             return doc.title();
         } catch (URISyntaxException exception) {
-            return "Invalid URL: " + url;
+            return "Invalid URL";
         } catch (IOException e) {
-            return "Error connecting to URL: " + url;
+            return "Error connecting to URL: ";
         }
     }
 
@@ -214,7 +219,7 @@ public class BlockwartBot extends ListenerAdapter {
             } else {
                 String recipient = parts[1];
                 String message = parts[2];
-                String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
+                String timestamp = ZonedDateTime.now().format(TIME_FORMATTER);
 
                 // Check if recipient has too many messages to receive
                 if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {

@@ -58,7 +58,7 @@ public class BlockwartBot extends ListenerAdapter {
 
     public static void main(String[] args) {
 
-        String botName = "LoreleyWIP";
+        String botName = "Loreley";
 
         // Configure the bot
         Configuration configuration = new Configuration.Builder()

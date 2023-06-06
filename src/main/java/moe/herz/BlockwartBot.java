@@ -88,15 +88,18 @@ public class BlockwartBot extends ListenerAdapter {
     public void onGenericMessage(GenericMessageEvent event) {
 
         // Regular expression pattern to identify URLs in the message
-        Pattern urlPattern = Pattern.compile("(https?://)?([\\da-z.-]+)\\.([a-z.]{2,6})([/\\w .-]*)*/?", Pattern.CASE_INSENSITIVE);
+        Pattern urlPattern = Pattern.compile("(https?://[\\w.-]+\\.[\\w.-]+[\\w./?=&#%-]*)", Pattern.CASE_INSENSITIVE);
 
         Matcher matcher = urlPattern.matcher(event.getMessage());
 
         while (matcher.find()) {
             String url = matcher.group();
-            if (!url.startsWith("http")) {
-                url = "http://" + url; // Add http protocol if not present
-            }
+
+            // Trimming trailing text (if any) from the URL
+            int spaceIndex = url.indexOf(' ');
+            if (spaceIndex != -1) {
+                url = url.substring(0, spaceIndex);
+        }
 
             // Skip non-HTML files
             String[] skippedExtensions = {".jpg",".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};

@@ -10,7 +10,8 @@ target/
 .idea/libraries/
 *.iws
 *.iml
-*.ipr
+*.ip
+.idea/
 
 ### Eclipse ###
 .apt_generated
@@ -39,3 +40,5 @@ build/
 
 ### api key###
 /config.properties
+
+

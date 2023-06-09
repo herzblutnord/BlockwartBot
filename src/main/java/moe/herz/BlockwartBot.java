@@ -36,7 +36,7 @@ public class BlockwartBot extends ListenerAdapter {
     private static final int MAX_UNSENT_MESSAGES = 5;
     private static final int MAX_RECEIVED_MESSAGES = 10;
     private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)",
-            "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~", "/ᐠ - ˕ -マ Ⳋ", "ฅ^•ﻌ•^ฅ", "ᓚᘏᗢ", "≽ܫ≼"};
+            "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~", "/ᐠ - ˕ -マ Ⳋ", "ฅ^•ω•^ฅ", "ᓚᘏᗢ", "≽ܫ≼"};
 
     //Properties object to hold configuration properties
     private Properties properties;
@@ -157,7 +157,25 @@ public class BlockwartBot extends ListenerAdapter {
             if (event instanceof MessageEvent messageEvent) {
                 messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), catKaomojis[index]);
             }
-            // Send message directly without username
+
+        }
+        // Russian Roulette feature
+        String GUN_EMOJI = "🔫";
+        if (event.getMessage().trim().equals(GUN_EMOJI)) {
+            String response;
+            Random rand = new Random();
+            double THRESHOLD = 0.05; // 5% chance
+            String sender = event.getUser().getNick();
+
+            if (rand.nextDouble() < THRESHOLD) {
+                response = "BANG! " + sender + " is dead!";
+            } else {
+                response = "Click! " + sender + " was lucky, there was no bullet.";
+            }
+
+            if (event instanceof MessageEvent messageEvent) {
+                messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), response);
+            }
         }
     }
     //urban dictionary api
@@ -199,7 +217,7 @@ public class BlockwartBot extends ListenerAdapter {
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5.1)");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5.2)");
         }
     }
 

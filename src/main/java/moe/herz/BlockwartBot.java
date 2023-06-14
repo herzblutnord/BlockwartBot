@@ -312,7 +312,7 @@ public class BlockwartBot extends ListenerAdapter {
                     return;
                 }
 
-               // Check if recipient has too many messages to receive
+                // Check if recipient has too many messages to receive
                 if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {
                     event.respond("This user has too many messages to receive.");
                     return;

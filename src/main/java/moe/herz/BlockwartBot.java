@@ -283,21 +283,38 @@ public class BlockwartBot extends ListenerAdapter {
                 }
 
                 // Check if recipient has too many messages to receive
-                if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {
-                    event.respond("This user has too many messages to receive.");
-                    return;
+                try {
+                    Statement st = db.createStatement();
+                    ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM tell WHERE recipient = '" + recipient + "'");
+                    if (rs.next()) {
+                        int count = rs.getInt(1);
+                        if (count >= MAX_RECEIVED_MESSAGES) {
+                            event.respond("This user has too many messages to receive.");
+                            return;
+                        }
+                    }
+                    rs.close();
+                    st.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
                 }
 
                 // Check if sender has too many pending messages for the recipient
-                LinkedList<String> recipientMessages = unsentMessages.getOrDefault(recipient, new LinkedList<>());
-                if (recipientMessages.stream().filter(m -> m.startsWith(sender + ":")).count() >= MAX_UNSENT_MESSAGES) {
-                    event.respond("You have too many pending messages for this user.");
-                    return;
+                try {
+                    Statement st = db.createStatement();
+                    ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM tell WHERE recipient = '" + recipient + "'" + " AND sender = '" + sender + "'");
+                    if (rs.next()) {
+                        int count = rs.getInt(1);
+                        if (count >= MAX_UNSENT_MESSAGES) {
+                            event.respond("You have too many pending messages for this user.");
+                            return;
+                        }
+                    }
+                    rs.close();
+                    st.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
                 }
-
-                // Add the message to the recipient's queue of unsent messages
-                unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + " (" + timestamp + "): " + message);
-                messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
 
                 // Add the message to database
                 try {

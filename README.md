@@ -41,10 +41,10 @@ Loreley requires a PostgreSQL database to manage the postponed messages feature.
 
     ```
     CREATE TABLE tell (
-        sender VARCHAR(50) NOT NULL,
-        recipient VARCHAR(50) NOT NULL,
+        sender VARCHAR( 50 ) NOT NULL,
+        recipient VARCHAR( 50 ) NOT NULL,
         message VARCHAR ( 500 ) NOT NULL,
-        timestamp VARCHAR(50) NOT NULL
+        timestamp VARCHAR( 50 ) NOT NULL
     );
     ```
 

@@ -349,6 +349,10 @@ public class BlockwartBot extends ListenerAdapter {
                 int messageCount = messages.size();
                 int sentCount = 0;
 
+                // Once messages are sent, clear them from the list
+                unsentMessages.remove(sender);
+                messagesToReceive.put(sender, 0); // Reset
+
                 event.getChannel().send().message(sender + ", you have postponed messages: ");
                 for (String message : messages) {
                     if(sentCount < 3){
@@ -362,11 +366,6 @@ public class BlockwartBot extends ListenerAdapter {
                 if (messageCount > 3) {
                     event.getChannel().send().message("The remaining messages were sent via DM");
                 }
-
-                // Once messages are sent, clear them from the list
-                unsentMessages.remove(sender);
-                messagesToReceive.put(sender, 0); // Reset
-
             }
 
             // delete messages from database

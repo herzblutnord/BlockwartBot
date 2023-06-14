@@ -9,8 +9,6 @@ import org.pircbotx.hooks.events.MessageEvent;
 import org.pircbotx.User;
 
 import java.util.regex.Pattern;
-import java.util.Random;
-import java.util.Properties;
 import java.io.FileInputStream;
 import java.util.*;
 import java.io.IOException;
@@ -18,6 +16,8 @@ import javax.net.ssl.SSLSocketFactory;
 import java.util.regex.Matcher;
 import java.net.URISyntaxException;
 import java.net.URI;
+import java.sql.*;
+import java.sql.Connection;
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -45,11 +45,54 @@ public class BlockwartBot extends ListenerAdapter {
     private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
     private final Map<String, Integer> messagesToReceive = new HashMap<>();
 
+    // Database connection
+    private Connection db;
+
     // Constructor to initialize properties
     public BlockwartBot() {
         try (FileInputStream in = new FileInputStream("./config.properties")) {
             properties = new Properties();
             properties.load(in);
+
+            // Connect to database
+            String databaseURL = properties.getProperty("db.url");
+            Connection conn = null;
+            try {
+                conn = DriverManager.getConnection(databaseURL, properties);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            db = conn;
+
+            // go through each recipient in database and initialize the unsent messages list
+            try {
+                Statement st = db.createStatement();
+
+                ResultSet rs = st.executeQuery("SELECT * FROM tell");
+                while (rs.next()) {
+                    String recipient = rs.getString("recipient");
+                    messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
+
+                    // go through each message in database and add it to the unsent messages list
+                    Statement st2 = db.createStatement();
+                    ResultSet rs2 = st2.executeQuery("SELECT * FROM tell WHERE recipient = '" + recipient + "'");
+                    LinkedList<String> messages = new LinkedList<>();
+                    while (rs2.next()) {
+                        String sender = rs2.getString("sender");
+                        String message = rs2.getString("message");
+                        String timestamp = rs2.getString("timestamp");
+                        messages.add(sender + " (" + timestamp + "): " + message);
+                    }
+                    unsentMessages.put(recipient, messages);
+                    st2.close();
+                    rs2.close();
+                }
+                st.close();
+                rs.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         } catch (IOException e) {
             e.printStackTrace();
             System.exit(1);  // Exit if the properties file cannot be loaded
@@ -76,7 +119,6 @@ public class BlockwartBot extends ListenerAdapter {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
     // Method to fetch website metadata
     public String fetchWebsiteMetadata(String url) {
@@ -263,7 +305,7 @@ public class BlockwartBot extends ListenerAdapter {
 
                 // Check if the recipient is the sender themselves or the bot
                 if (recipient.equalsIgnoreCase(sender)) {
-                    event.respond("Aww, talking to yourself? How pityful...");
+                    event.respond("Aww, talking to yourself? How pitiful...");
                     return;
                 } else if (recipient.equalsIgnoreCase(event.getBot().getNick())) {
                     event.respond("I am right here, baka!");
@@ -278,7 +320,7 @@ public class BlockwartBot extends ListenerAdapter {
 
                 // Check if sender has too many pending messages for the recipient
                 LinkedList<String> recipientMessages = unsentMessages.getOrDefault(recipient, new LinkedList<>());
-                if (recipientMessages.stream().filter(m -> m.startsWith(sender + ":")).count() >= MAX_UNSENT_MESSAGES) {
+                if (recipientMessages.stream().filter(m -> m.startsWith(sender + " (")).count() >= MAX_UNSENT_MESSAGES) {
                     event.respond("You have too many pending messages for this user.");
                     return;
                 }
@@ -287,17 +329,29 @@ public class BlockwartBot extends ListenerAdapter {
                 unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + " (" + timestamp + "): " + message);
                 messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
 
+                // Add the message to database
+                try {
+                    Statement st = db.createStatement();
+                    st.executeUpdate("INSERT INTO tell (sender, recipient, message, timestamp) VALUES ('" + sender + "', '" + recipient + "', '" + message + "', '" + timestamp + "')");
+                    st.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
                 // Add confirmation message
                 event.getChannel().send().message("Your message will be delivered the next time " + recipient + " is here!");
             }
         }
         // If it's a regular message, check if there are any postponed messages for the user
         else {
-            // Send the postponed messages in the desired format
             if (unsentMessages.containsKey(sender)) {
                 LinkedList<String> messages = unsentMessages.get(sender);
                 int messageCount = messages.size();
                 int sentCount = 0;
+
+                // Once messages are sent, clear them from the list
+                unsentMessages.remove(sender);
+                messagesToReceive.put(sender, 0); // Reset
 
                 event.getChannel().send().message(sender + ", you have postponed messages: ");
                 for (String message : messages) {
@@ -309,14 +363,18 @@ public class BlockwartBot extends ListenerAdapter {
                     }
                     sentCount++;
                 }
-                if(messageCount > 3){
+                if (messageCount > 3) {
                     event.getChannel().send().message("The remaining messages were sent via DM");
                 }
+            }
 
-                // Once messages are sent, clear them from the list
-                unsentMessages.remove(sender);
-                messagesToReceive.put(sender, 0); // Reset
-
+            // delete messages from database
+            try {
+                Statement st = db.createStatement();
+                st.executeUpdate("DELETE FROM tell WHERE recipient = '" + sender + "'");
+                st.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
         }
     }

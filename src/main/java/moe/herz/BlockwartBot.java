@@ -133,20 +133,24 @@ public class BlockwartBot extends ListenerAdapter {
             if (parts.length == 2) {
                 String term = parts[1];
                 List<String> definitions = searchUrbanDictionary(term);
-                int count = 0;
-                for (String definition : definitions) {
-                    if (count < 4) {
-                        event.respond(definition);
-                    } else {
-                        break;
+
+                if (event instanceof MessageEvent messageEvent) {
+                    String channelName = messageEvent.getChannel().getName();
+                    for (int i = 0; i < definitions.size() && i < 4; i++) { // Loop only 4 times
+                        String definition = definitions.get(i);
+                        if (!definition.trim().isEmpty()) { // skip empty lines
+                            messageEvent.getBot().sendIRC().message(channelName, definition);
+                        }
                     }
-                    count++;
-                }
-                if (definitions.size() > 4) {
-                    event.respond("... [message truncated due to length]");
+
+                    // If there are more than 4 messages, send the truncation message as the 5th message
+                    if (definitions.size() > 4) {
+                        messageEvent.getBot().sendIRC().message(channelName, "... [message truncated due to length]");
+                    }
                 }
             }
         }
+
 
         //nya-meow react
         Pattern p = Pattern.compile("(?i)^nya.*|meow");
@@ -195,11 +199,7 @@ public class BlockwartBot extends ListenerAdapter {
                 JsonElement jsonElement = JsonParser.parseString(jsonData);
                 if (jsonElement.getAsJsonObject().get("list").getAsJsonArray().size() > 0) {
                     String definition = jsonElement.getAsJsonObject().get("list").getAsJsonArray().get(0).getAsJsonObject().get("definition").getAsString();
-
-                    List<String> definitionParts = new ArrayList<>();
-                    String[] parts = definition.split("\\r?\\n");
-                    Collections.addAll(definitionParts, parts);
-                    return definitionParts;
+                    return splitMessage(definition, 400);  // Split the message into chunks of max 400 characters
                 } else {
                     return Collections.singletonList("No definition found for " + term);
                 }
@@ -212,12 +212,37 @@ public class BlockwartBot extends ListenerAdapter {
         }
     }
 
+    private List<String> splitMessage(String message, int maxLength) {
+        List<String> result = new ArrayList<>();
+        String[] lines = message.split("\n"); // Split the message into lines first
+
+        for (String line : lines) {
+            int index = 0;
+            while (index < line.length()) {
+                int endIndex = Math.min(index + maxLength, line.length());
+                result.add(line.substring(index, endIndex));
+                index = endIndex;
+                if (result.size() >= 5) { // Stop after 5 chunks have been created
+                    return result;
+                }
+            }
+        }
+
+        return result;
+    }
+
+
+
+
+
+
+
     // Greeting on bot joining
     @Override
     public void onJoin(JoinEvent event) {
         User user = event.getUser();
         if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5.2)");
+            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 0.5.3)");
         }
     }
 

@@ -9,8 +9,6 @@ import org.pircbotx.hooks.events.MessageEvent;
 import org.pircbotx.User;
 
 import java.util.regex.Pattern;
-import java.util.Random;
-import java.util.Properties;
 import java.io.FileInputStream;
 import java.util.*;
 import java.io.IOException;
@@ -18,6 +16,8 @@ import javax.net.ssl.SSLSocketFactory;
 import java.util.regex.Matcher;
 import java.net.URISyntaxException;
 import java.net.URI;
+import java.sql.*;
+import java.sql.Connection;
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -45,11 +45,25 @@ public class BlockwartBot extends ListenerAdapter {
     private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
     private final Map<String, Integer> messagesToReceive = new HashMap<>();
 
+    // Database connection
+    private Connection db;
+
     // Constructor to initialize properties
     public BlockwartBot() {
         try (FileInputStream in = new FileInputStream("./config.properties")) {
             properties = new Properties();
             properties.load(in);
+
+            // Connect to database
+            String databaseURL = properties.getProperty("db.url");
+            Connection conn = null;
+            try {
+                conn = DriverManager.getConnection(databaseURL, properties);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            db = conn;
         } catch (IOException e) {
             e.printStackTrace();
             System.exit(1);  // Exit if the properties file cannot be loaded
@@ -58,14 +72,13 @@ public class BlockwartBot extends ListenerAdapter {
 
     public static void main(String[] args) {
 
-        String botName = "Loreley";
+        String botName = "LoreleyToo";
 
         // Configure the bot
         Configuration configuration = new Configuration.Builder()
                 .setName(botName)
                 .addServer("herz.moe", 6697)
-                .addAutoJoinChannel("#herz")
-                .addAutoJoinChannel("#deutsch")
+                .addAutoJoinChannel("#kaitou")
                 .addListener(new BlockwartBot())
                 .setSocketFactory(SSLSocketFactory.getDefault()) // Enable SSL
                 .buildConfiguration();
@@ -76,7 +89,6 @@ public class BlockwartBot extends ListenerAdapter {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
     // Method to fetch website metadata
     public String fetchWebsiteMetadata(String url) {
@@ -263,7 +275,7 @@ public class BlockwartBot extends ListenerAdapter {
 
                 // Check if the recipient is the sender themselves or the bot
                 if (recipient.equalsIgnoreCase(sender)) {
-                    event.respond("Aww, talking to yourself? How pityful...");
+                    event.respond("Aww, talking to yourself? How pitiful...");
                     return;
                 } else if (recipient.equalsIgnoreCase(event.getBot().getNick())) {
                     event.respond("I am right here, baka!");
@@ -287,15 +299,50 @@ public class BlockwartBot extends ListenerAdapter {
                 unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + " (" + timestamp + "): " + message);
                 messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
 
+                // Add the message to database
+                try {
+                    Statement st = db.createStatement();
+                    st.executeUpdate("INSERT INTO tell (sender, recipient, message, timestamp) VALUES ('" + sender + "', '" + recipient + "', '" + message + "', '" + timestamp + "')");
+                    st.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
                 // Add confirmation message
                 event.getChannel().send().message("Your message will be delivered the next time " + recipient + " is here!");
             }
         }
         // If it's a regular message, check if there are any postponed messages for the user
         else {
-            // Send the postponed messages in the desired format
-            if (unsentMessages.containsKey(sender)) {
-                LinkedList<String> messages = unsentMessages.get(sender);
+            LinkedList<String> messages = new LinkedList<>();
+            // make sql query and take messages from database
+            try {
+                Statement st = db.createStatement();
+                ResultSet rs = st.executeQuery("SELECT * FROM tell WHERE recipient = '" + sender + "'");
+
+                while (rs.next()) {
+                    String tellSender = rs.getString("sender");
+                    String message = rs.getString("message");
+                    String timestamp = rs.getString("timestamp");
+                    String fullMessage = tellSender + " (" + timestamp + "): " + message;
+
+                    messages.add(fullMessage);
+                }
+                st.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            // delete messages from database
+            try {
+                Statement st = db.createStatement();
+                st.executeUpdate("DELETE FROM tell WHERE recipient = '" + sender + "'");
+                st.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            if (!messages.isEmpty()) {
                 int messageCount = messages.size();
                 int sentCount = 0;
 
@@ -309,14 +356,9 @@ public class BlockwartBot extends ListenerAdapter {
                     }
                     sentCount++;
                 }
-                if(messageCount > 3){
+                if (messageCount > 3){
                     event.getChannel().send().message("The remaining messages were sent via DM");
                 }
-
-                // Once messages are sent, clear them from the list
-                unsentMessages.remove(sender);
-                messagesToReceive.put(sender, 0); // Reset
-
             }
         }
     }

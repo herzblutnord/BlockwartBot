@@ -151,7 +151,6 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
 
-
         //nya-meow react
         Pattern p = Pattern.compile("(?i)^nya.*|meow");
         Matcher m = p.matcher(event.getMessage());
@@ -168,7 +167,7 @@ public class BlockwartBot extends ListenerAdapter {
         if (event.getMessage().trim().equals(GUN_EMOJI)) {
             String response;
             Random rand = new Random();
-            double THRESHOLD = 0.05; // 5% chance
+            double THRESHOLD = 0.17; // 17% chance (one in six)
             String sender = event.getUser().getNick();
 
             if (rand.nextDouble() < THRESHOLD) {
@@ -182,6 +181,7 @@ public class BlockwartBot extends ListenerAdapter {
             }
         }
     }
+
     //urban dictionary api
     private List<String> searchUrbanDictionary(String term) {
         String apiKey = properties.getProperty("api.key");
@@ -230,12 +230,6 @@ public class BlockwartBot extends ListenerAdapter {
 
         return result;
     }
-
-
-
-
-
-
 
     // Greeting on bot joining
     @Override

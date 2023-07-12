@@ -1,5 +1,12 @@
 package moe.herz;
 
+import java.sql.SQLException;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+import javax.net.ssl.SSLSocketFactory;
+import java.util.List;
+import java.util.*;
+
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
 import org.pircbotx.hooks.ListenerAdapter;
@@ -7,190 +14,99 @@ import org.pircbotx.hooks.types.GenericMessageEvent;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.MessageEvent;
 import org.pircbotx.User;
-
-import java.util.regex.Pattern;
-import java.io.FileInputStream;
-import java.util.*;
-import java.io.IOException;
-import javax.net.ssl.SSLSocketFactory;
-import java.util.regex.Matcher;
-import java.net.URISyntaxException;
-import java.net.URI;
-import java.sql.*;
-import java.sql.Connection;
-import java.time.format.DateTimeFormatter;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import okhttp3.*;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
+import org.pircbotx.hooks.events.InviteEvent;
+import org.pircbotx.hooks.events.PrivateMessageEvent;
 
 public class BlockwartBot extends ListenerAdapter {
+    private final YoutubeService youtubeService;
+    private final LastFmService lastFmService;
+    private final TellMessageHandler tellMessageHandler;
+    private final UrbanDictionaryService urbanDictionaryService;
+    private final HelpService helpService;
 
-    // Defined constants
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(ZoneId.of("Europe/Berlin"));
-    private static final int MAX_UNSENT_MESSAGES = 5;
-    private static final int MAX_RECEIVED_MESSAGES = 10;
+    private final String BOT_NAME;
+    private final String BOT_VERSION = "2.0";
+    private final String SERVER_NAME;
+    private final int SERVER_PORT;
+    private final String CHANNEL_NAME;
+    private final ReminderHandler reminderHandler;
+
     private final String[] catKaomojis = {"^._.^", "/ᐠ｡▿｡ᐟ\\*ᵖᵘʳʳ*", "(=^-ω-^=)", "(=｀ェ´=)",
             "（Φ ω Φ）", "(˵Φ ω Φ˵)", "/ᐠ｡ꞈ｡ᐟ\\", "=^o.o^=", "/ᐠ_ ꞈ _ᐟ\\ɴʏᴀ~", "/ᐠ - ˕ -マ Ⳋ", "ฅ^•ω•^ฅ", "ᓚᘏᗢ", "≽ܫ≼"};
 
-    //Properties object to hold configuration properties
-    private Properties properties;
-
-    // Hashmaps to manage messages
-    private final Map<String, LinkedList<String>> unsentMessages = new HashMap<>();
-    private final Map<String, Integer> messagesToReceive = new HashMap<>();
-
-    // Database connection
-    private Connection db;
-
-    // Constructor to initialize properties
-    public BlockwartBot() {
-        try (FileInputStream in = new FileInputStream("./config.properties")) {
-            properties = new Properties();
-            properties.load(in);
-
-            // Connect to database
-            String databaseURL = properties.getProperty("db.url");
-            Connection conn = null;
-            try {
-                conn = DriverManager.getConnection(databaseURL, properties);
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-
-            db = conn;
-
-            // go through each recipient in database and initialize the unsent messages list
-            try {
-                Statement st = db.createStatement();
-
-                ResultSet rs = st.executeQuery("SELECT * FROM tell");
-                while (rs.next()) {
-                    String recipient = rs.getString("recipient");
-                    messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
-
-                    // go through each message in database and add it to the unsent messages list
-                    Statement st2 = db.createStatement();
-                    ResultSet rs2 = st2.executeQuery("SELECT * FROM tell WHERE recipient = '" + recipient + "'");
-                    LinkedList<String> messages = new LinkedList<>();
-                    while (rs2.next()) {
-                        String sender = rs2.getString("sender");
-                        String message = rs2.getString("message");
-                        String timestamp = rs2.getString("timestamp");
-                        messages.add(sender + " (" + timestamp + "): " + message);
-                    }
-                    unsentMessages.put(recipient, messages);
-                    st2.close();
-                    rs2.close();
-                }
-                st.close();
-                rs.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(1);  // Exit if the properties file cannot be loaded
-        }
+    public BlockwartBot(YoutubeService youtubeService, LastFmService lastFmService, TellMessageHandler tellMessageHandler, UrbanDictionaryService urbanDictionaryService, Config config) {
+        this.youtubeService = youtubeService;
+        this.lastFmService = lastFmService;
+        this.tellMessageHandler = tellMessageHandler;
+        this.BOT_NAME = config.getProperty("bot.name");
+        this.SERVER_NAME = config.getProperty("server.name");
+        this.SERVER_PORT = Integer.parseInt(config.getProperty("server.port"));
+        this.CHANNEL_NAME = config.getProperty("channel.name");
+        this.reminderHandler = new ReminderHandler(config.getDbConnection());
+        reminderHandler.init(); // First, initialize reminders from the database
+        reminderHandler.cleanupOldReminders(); // Then cleanup old reminders
+        reminderHandler.init(); // Finally, reinitialize reminders from the updated database
+        this.urbanDictionaryService = urbanDictionaryService;
+        this.helpService = new HelpService();
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws SQLException {
+        Config config = new Config();
+        YoutubeService youtubeService = new YoutubeService(config);
+        LastFmService lastFmService = new LastFmService(config);
+        TellMessageHandler tellMessageHandler = new TellMessageHandler(config.getDbConnection());
+        UrbanDictionaryService urbanDictionaryService = new UrbanDictionaryService(config);
 
-        String botName = "Loreley";
+        BlockwartBot botInstance = new BlockwartBot(youtubeService, lastFmService, tellMessageHandler, urbanDictionaryService, config);
 
-        // Configure the bot
         Configuration configuration = new Configuration.Builder()
-                .setName(botName)
-                .addServer("herz.moe", 6697)
-                .addAutoJoinChannel("#herz")
-                .addAutoJoinChannel("#deutsch")
-                .addListener(new BlockwartBot())
-                .setSocketFactory(SSLSocketFactory.getDefault()) // Enable SSL
+                .setName(botInstance.BOT_NAME)
+                .addServer(botInstance.SERVER_NAME, botInstance.SERVER_PORT)
+                .addAutoJoinChannel(botInstance.CHANNEL_NAME)
+                .addListener(botInstance)
+                .setSocketFactory(SSLSocketFactory.getDefault())
                 .buildConfiguration();
 
-        // Start the bot
         try (PircBotX bot = new PircBotX(configuration)) {
+            // Initialize reminderHandler and start the reminder sender thread
+            botInstance.reminderHandler.init();
+            Thread reminderSenderThread = new Thread(new ReminderSender(botInstance.reminderHandler, bot));
+
+            reminderSenderThread.start();
+
             bot.startBot();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-    // Method to fetch website metadata
-    public String fetchWebsiteMetadata(String url) {
-        try {
-            new URI(url);
-            Document doc = Jsoup.connect(url).get();
-            return doc.title();
-        } catch (URISyntaxException exception) {
-            return "Invalid URL";
-        } catch (IOException e) {
-            return "Error connecting to URL: ";
+
+    @Override
+    public void onJoin(JoinEvent event) {
+        User user = event.getUser();
+        if (user != null && user.getNick().equals(BOT_NAME)) {
+            event.getChannel().send().message("Greetings from the depths, I'm " + BOT_NAME + ", your helpful water spirit! (Version " + BOT_VERSION + ")");
         }
     }
 
-    // Method to handle general message events
     @Override
     public void onGenericMessage(GenericMessageEvent event) {
+        String message = event.getMessage();
+        Pattern urlPattern = Pattern.compile("(https?://[\\w.-]+\\.[\\w.-]+[\\w./?=&#%\\-\\(\\)]*)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = urlPattern.matcher(message);
 
-        // Regular expression pattern to identify URLs in the message
-        Pattern urlPattern = Pattern.compile("(https?://[\\w.-]+\\.[\\w.-]+[\\w./?=&#%-]*)", Pattern.CASE_INSENSITIVE);
 
-        Matcher matcher = urlPattern.matcher(event.getMessage());
-
-        while (matcher.find()) {
-            String url = matcher.group();
-
-            // Trimming trailing text (if any) from the URL
-            int spaceIndex = url.indexOf(' ');
-            if (spaceIndex != -1) {
-                url = url.substring(0, spaceIndex);
-        }
-
-            // Skip non-HTML files
-            String[] skippedExtensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
-            boolean skip = false;
-            for (String extension : skippedExtensions) {
-                if (url.toLowerCase().endsWith(extension)) {
-                    skip = true;
-                    break;
-                }
-            }
-
-            if (!skip) {
-                String metadata = fetchWebsiteMetadata(url);
-                if (event instanceof MessageEvent messageEvent) {
-                    messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), metadata);
-                }
-            }
-        }
-
-        // Method to search Urban Dictionary for a term
-        if (event.getMessage().startsWith(".ud")) {
-            String[] parts = event.getMessage().split(" ", 2);
-            if (parts.length == 2) {
-                String term = parts[1];
-                List<String> definitions = searchUrbanDictionary(term);
-
-                if (event instanceof MessageEvent messageEvent) {
-                    String channelName = messageEvent.getChannel().getName();
-                    for (int i = 0; i < definitions.size() && i < 4; i++) { // Loop only 4 times
-                        String definition = definitions.get(i);
-                        if (!definition.trim().isEmpty()) { // skip empty lines
-                            messageEvent.getBot().sendIRC().message(channelName, definition);
-                        }
-                    }
-
-                    // If there are more than 4 messages, send the truncation message as the 5th message
-                    if (definitions.size() > 4) {
-                        messageEvent.getBot().sendIRC().message(channelName, "... [message truncated due to length]");
-                    }
-                }
-            }
+        if (message.startsWith(".help")) {
+            handleHelpCommand(event);
+        } else if (message.startsWith(".np ")) {
+            handleNowPlayingCommand(event, message);
+        } else if (message.startsWith(".in ")) {
+            handleReminderCommand(event, message);
+        } else if (message.startsWith(".yt ")) {
+            handleYoutubeCommand(event, message);
+        } else if (message.startsWith(".ud ")) {
+            handleUrbanDictionaryCommand(event, message);
+        } else {
+            handleUrlFetching(event, matcher);
         }
 
         //nya-meow react
@@ -222,160 +138,127 @@ public class BlockwartBot extends ListenerAdapter {
                 messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), response);
             }
         }
+
     }
 
-    //urban dictionary api
-    private List<String> searchUrbanDictionary(String term) {
-        String apiKey = properties.getProperty("api.key");
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url("https://mashape-community-urban-dictionary.p.rapidapi.com/define?term=" + term)
-                .get()
-                .addHeader("x-rapidapi-host", "mashape-community-urban-dictionary.p.rapidapi.com")
-                .addHeader("x-rapidapi-key", apiKey)
-                .build();
+    private void handleNowPlayingCommand(GenericMessageEvent event, String message) {
+        String username = message.substring(4);
+        try {
+            String response = lastFmService.getCurrentTrack(username);
+            event.respondWith(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-        try (Response response = client.newCall(request).execute()) {
-            if (response.body() != null) {
-                String jsonData = response.body().string();
-                JsonElement jsonElement = JsonParser.parseString(jsonData);
-                if (jsonElement.getAsJsonObject().get("list").getAsJsonArray().size() > 0) {
-                    String definition = jsonElement.getAsJsonObject().get("list").getAsJsonArray().get(0).getAsJsonObject().get("definition").getAsString();
-                    return splitMessage(definition, 400);  // Split the message into chunks of max 400 characters
-                } else {
-                    return Collections.singletonList("No definition found for " + term);
+    private void handleYoutubeCommand(GenericMessageEvent event, String message) {
+        String query = message.substring(4);
+        String videoUrl = youtubeService.searchYoutube(query);
+        if (videoUrl != null) {
+            event.respondWith(videoUrl);
+        }
+    }
+
+    private void handleUrbanDictionaryCommand(GenericMessageEvent event, String message) {
+        String term = message.substring(4);
+        List<String> definitions = urbanDictionaryService.searchUrbanDictionary(term);
+        for (int i = 0; i < definitions.size() && i < 4; i++) {
+            String definition = definitions.get(i);
+            if (!definition.trim().isEmpty()) {
+                event.respondWith(definition);
+            }
+        }
+        if (definitions.size() > 4) {
+            event.respondWith("... [message truncated due to length]");
+        }
+    }
+
+    private void handleUrlFetching(GenericMessageEvent event, Matcher matcher) {
+
+        while (matcher.find()) {
+            String url = matcher.group(1);
+            int spaceIndex = url.indexOf(' ');
+            if (spaceIndex != -1) {
+                url = url.substring(0, spaceIndex);
+            }
+
+            // For youtube.com/watch?v= and youtu.be/ links, get and send video details
+            if (url.contains("youtube.com/watch?v=") || url.contains("youtu.be/")) {
+                String videoId = url.contains("youtube.com/watch?v=") ? url.substring(url.indexOf("=") + 1) : url.substring(url.indexOf("be/") + 3);
+                String videoDetails = youtubeService.getVideoDetails(videoId);
+                if (videoDetails != null) {
+                    if (event instanceof MessageEvent messageEvent) {
+                        messageEvent.getBot().sendIRC().message(messageEvent.getChannel().getName(), videoDetails);
+                    }
                 }
             } else {
-                return Collections.singletonList("Error: Response body is null");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return Collections.singletonList("Error connecting to Urban Dictionary API.");
-        }
-    }
+                // Skip non-HTML files
+                String[] skippedExtensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".mp4", ".mp3", ".wav", ".ogg", ".flac", ".mkv", ".avi", ".flv"};
+                boolean skip = false;
+                for (String extension : skippedExtensions) {
+                    if (url.toLowerCase().endsWith(extension)) {
+                        skip = true;
+                        break;
+                    }
+                }
 
-    private List<String> splitMessage(String message, int maxLength) {
-        List<String> result = new ArrayList<>();
-        String[] lines = message.split("\n"); // Split the message into lines first
-
-        for (String line : lines) {
-            int index = 0;
-            while (index < line.length()) {
-                int endIndex = Math.min(index + maxLength, line.length());
-                result.add(line.substring(index, endIndex));
-                index = endIndex;
-                if (result.size() >= 5) { // Stop after 5 chunks have been created
-                    return result;
+                if (!skip) {
+                    // Use the UrlMetadataFetcher class to get the metadata
+                    String metadata = UrlMetadataFetcher.fetchWebsiteMetadata(url);
+                    event.respondWith(metadata);
                 }
             }
         }
-
-        return result;
     }
 
-    // Greeting on bot joining
     @Override
-    public void onJoin(JoinEvent event) {
+    public void onInvite(InviteEvent event) {
         User user = event.getUser();
-        if (user != null && user.getNick().equals("Loreley")) {
-            event.getChannel().send().message("Here I am, Loreley your friendly IRC bot! (Version 1.0)");
+        if (user != null && user.getNick() != null && user.getNick().equals("herzblutnord")) {
+            String channelName = event.getChannel();
+            if (channelName != null) {
+                event.getBot().sendIRC().joinChannel(channelName);
+            }
         }
     }
 
-    // Method to handle message events
     @Override
     public void onMessage(MessageEvent event) {
         User user = event.getUser();
         if (user == null) {
             return;
         }
-
         String messageText = event.getMessage();
         String sender = user.getNick();
-
-        // If the message is a .tell command, handle it accordingly
         if (messageText.startsWith(".tell")) {
-            String[] parts = messageText.split(" ", 3); // Split to get .tell, recipient, and message
-            if (parts.length != 3) {
-                event.respond("Invalid .tell command. Usage: .tell <nick> <message>");
-            } else {
-                String recipient = parts[1];
-                String message = parts[2];
-                String timestamp = ZonedDateTime.now().format(TIME_FORMATTER);
-
-                // Check if the recipient is the sender themselves or the bot
-                if (recipient.equalsIgnoreCase(sender)) {
-                    event.respond("Aww, talking to yourself? How pitiful...");
-                    return;
-                } else if (recipient.equalsIgnoreCase(event.getBot().getNick())) {
-                    event.respond("I am right here, baka!");
-                    return;
-                }
-
-                // Check if recipient has too many messages to receive
-                if (messagesToReceive.getOrDefault(recipient, 0) >= MAX_RECEIVED_MESSAGES) {
-                    event.respond("This user has too many messages to receive.");
-                    return;
-                }
-
-                // Check if sender has too many pending messages for the recipient
-                LinkedList<String> recipientMessages = unsentMessages.getOrDefault(recipient, new LinkedList<>());
-                if (recipientMessages.stream().filter(m -> m.startsWith(sender + " (")).count() >= MAX_UNSENT_MESSAGES) {
-                    event.respond("You have too many pending messages for this user.");
-                    return;
-                }
-
-                // Add the message to the recipient's queue of unsent messages
-                unsentMessages.computeIfAbsent(recipient, k -> new LinkedList<>()).add(sender + " (" + timestamp + "): " + message);
-                messagesToReceive.put(recipient, messagesToReceive.getOrDefault(recipient, 0) + 1);
-
-                // Add the message to database
-                try {
-                    Statement st = db.createStatement();
-                    st.executeUpdate("INSERT INTO tell (sender, recipient, message, timestamp) VALUES ('" + sender + "', '" + recipient + "', '" + message + "', '" + timestamp + "')");
-                    st.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-
-                // Add confirmation message
-                event.getChannel().send().message("Your message will be delivered the next time " + recipient + " is here!");
-            }
-        }
-        // If it's a regular message, check if there are any postponed messages for the user
-        else {
-            if (unsentMessages.containsKey(sender)) {
-                LinkedList<String> messages = unsentMessages.get(sender);
-                int messageCount = messages.size();
-                int sentCount = 0;
-
-                // Once messages are sent, clear them from the list
-                unsentMessages.remove(sender);
-                messagesToReceive.put(sender, 0); // Reset
-
-                event.getChannel().send().message(sender + ", you have postponed messages: ");
-                for (String message : messages) {
-                    if(sentCount < 3){
-                        event.getChannel().send().message(message);
-                    } else {
-                        // Send the remaining messages as DM.
-                        event.getBot().sendIRC().message(user.getNick(), message);
-                    }
-                    sentCount++;
-                }
-                if (messageCount > 3) {
-                    event.getChannel().send().message("The remaining messages were sent via DM");
-                }
-            }
-
-            // delete messages from database
-            try {
-                Statement st = db.createStatement();
-                st.executeUpdate("DELETE FROM tell WHERE recipient = '" + sender + "'");
-                st.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+            tellMessageHandler.handleTellMessage(sender, messageText, event);
+        } else {
+            tellMessageHandler.handleRegularMessage(sender, event);
         }
     }
+
+    private void handleReminderCommand(GenericMessageEvent event, String message) {
+        String sender = event.getUser().getNick();
+        if (event instanceof MessageEvent messageEvent) {
+            reminderHandler.processReminderRequest(sender, message, messageEvent.getChannel().getName(), event);
+        } else if (event instanceof PrivateMessageEvent) {
+            // Handle the case for a private message
+            reminderHandler.processReminderRequest(sender, message, sender, event);
+        }
+    }
+
+    private void handleHelpCommand(GenericMessageEvent event) {
+        User user = event.getUser();
+        if(user == null) {
+            return;
+        }
+
+        if (event instanceof MessageEvent messageEvent) {
+            messageEvent.getChannel().send().message("I will send you a list of all my commands per DM");
+            helpService.sendHelp(user, event.getBot());
+        } else if (event instanceof PrivateMessageEvent) {
+            helpService.sendHelp(user, event.getBot());
+        }
+    }
+
 }
